@@ -1,4 +1,4 @@
-// Token Radar, model radar-2 (Node 22, standard library only).
+// Token Radar, model radar-3 (Node 22, standard library only).
 //
 // Reads the sealed DefiLlama snapshot, scores every rankable pre-token protocol with the
 // model in lib/model.ts, and writes the entry's outputs:
@@ -27,91 +27,94 @@ import { fileURLToPath } from 'node:url';
 import { boardIssue, buildRadar, dataScript, parseSnapshot } from './lib/model.ts';
 import { buildDossier } from './vendor/makefun-board.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
+const rootDir = fileURLToPath(new URL('.', import.meta.url));
 
 /** The scorer's own caps: the dossier text cap shapes the bytes, the rest refuse. */
-const TEXT_MAX_BYTES = 65_536;
-const SCREENSHOT_CAPS = { max: 4, max_bytes: 524_288 };
-const IMAGE_NAME = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/;
+const MAX_TEXT_BYTES = 65_536;
+const SHOT_CAPS = { max: 4, max_bytes: 524_288 };
+const IMAGE_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/;
 
-/** Read `--name <value>` (or `--name=<value>`) out of the arguments, else `fallback`. */
-function arg(name: string, fallback: string): string {
-  const at = process.argv.indexOf(`--${name}`);
-  if (at >= 0 && at + 1 < process.argv.length) return process.argv[at + 1]!;
-  const withEquals = process.argv.find((a) => a.startsWith(`--${name}=`));
-  return withEquals === undefined ? fallback : withEquals.slice(name.length + 3);
+/** Read `--key <value>` (or `--key=<value>`) out of the arguments, else `def`. */
+function cliArg(key: string, def: string): string {
+  const pos = process.argv.indexOf(`--${key}`);
+  if (pos >= 0 && pos + 1 < process.argv.length) return process.argv[pos + 1]!;
+  const eqForm = process.argv.find((argVal) => argVal.startsWith(`--${key}=`));
+  return eqForm === undefined ? def : eqForm.slice(key.length + 3);
 }
 
-function fail(message: string): never {
-  process.stderr.write(`token radar: ${message}\n`);
+function die(msg: string): never {
+  process.stderr.write(`token radar: ${msg}\n`);
   process.exit(1);
 }
 
-const inputArg = arg('input', '/input');
-const inputFile = inputArg.endsWith('.json') ? inputArg : join(inputArg, 'snapshot.json');
-if (!existsSync(inputFile)) {
-  fail(
-    `no snapshot at ${inputFile}: pass --input <snapshot.json|directory> or mount the sealed /input`,
+const inputRaw = cliArg('input', '/input');
+const inputPath = inputRaw.endsWith('.json') ? inputRaw : join(inputRaw, 'snapshot.json');
+if (!existsSync(inputPath)) {
+  die(
+    `no snapshot at ${inputPath}: pass --input <snapshot.json|directory> or mount the sealed /input`,
   );
 }
-const out = arg('output', process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
+const outDir = cliArg('output', process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
 
-const snapshot = parseSnapshot(readFileSync(inputFile, 'utf8'));
-const { board, radar } = buildRadar(snapshot);
-const issue = boardIssue(board, snapshot);
-if (issue !== null) fail(`the model wrote a board the gate refuses: ${issue}`);
+const snap = parseSnapshot(readFileSync(inputPath, 'utf8'));
+const { board, radar } = buildRadar(snap);
+const problem = boardIssue(board, snap);
+if (problem !== null) die(`the model wrote a board the gate refuses: ${problem}`);
 
-mkdirSync(out, { recursive: true });
-writeFileSync(join(out, 'board.json'), `${JSON.stringify({ rows: board })}\n`);
-writeFileSync(join(out, 'data.js'), dataScript(radar));
+mkdirSync(outDir, { recursive: true });
+writeFileSync(join(outDir, 'board.json'), `${JSON.stringify({ rows: board })}\n`);
+writeFileSync(join(outDir, 'data.js'), dataScript(radar));
 
-/** Copy one directory's regular files into `to`, skipping names that start with a dot. */
-function copyFiles(from: string, to: string): string[] {
-  if (!existsSync(from)) return [];
-  mkdirSync(to, { recursive: true });
-  const copied: string[] = [];
-  for (const name of readdirSync(from)) {
-    if (name.startsWith('.')) continue;
-    const path = join(from, name);
-    if (!statSync(path).isFile()) continue;
-    copyFileSync(path, join(to, name));
-    copied.push(name);
+/** Copy one directory's regular files into `dst`, skipping names that start with a dot. */
+function copyDir(src: string, dst: string): string[] {
+  if (!existsSync(src)) return [];
+  mkdirSync(dst, { recursive: true });
+  const done: string[] = [];
+  for (const file of readdirSync(src)) {
+    if (file.startsWith('.')) continue;
+    const srcPath = join(src, file);
+    if (!statSync(srcPath).isFile()) continue;
+    copyFileSync(srcPath, join(dst, file));
+    done.push(file);
   }
-  return copied;
+  return done;
 }
 
-const dashboardFiles = copyFiles(join(here, 'dashboard'), join(out, 'dashboard'));
-if (dashboardFiles.length < 3 || !dashboardFiles.includes('index.html')) {
-  fail(`dashboard/ holds ${dashboardFiles.length} files and no usable index.html: hand in a page`);
+const dashFiles = copyDir(join(rootDir, 'dashboard'), join(outDir, 'dashboard'));
+if (dashFiles.length < 3 || !dashFiles.includes('index.html')) {
+  die(`dashboard/ holds ${dashFiles.length} files and no usable index.html: hand in a page`);
 }
-const shots = copyFiles(join(here, 'screenshots'), join(out, 'screenshots'));
-if (shots.length < 3) {
-  fail(
-    `screenshots/ holds ${shots.length} image${shots.length === 1 ? '' : 's'}: hand in 3, the board, a detail view and a filtered view`,
+const shotFiles = copyDir(join(rootDir, 'screenshots'), join(outDir, 'screenshots'));
+if (shotFiles.length < 3) {
+  die(
+    `screenshots/ holds ${shotFiles.length} image${shotFiles.length === 1 ? '' : 's'}: hand in 3, the board, a detail view and a filtered view`,
   );
 }
-for (const name of shots) {
-  if (!IMAGE_NAME.test(name)) {
-    fail(`screenshots/${name}: a name is letters, digits and . _ -, 1 to 128 characters`);
+for (const fileName of shotFiles) {
+  if (!IMAGE_NAME_RE.test(fileName)) {
+    die(`screenshots/${fileName}: a name is letters, digits and . _ -, 1 to 128 characters`);
   }
 }
 
 // The dossier is written last: the scorer rebuilds it from this /output and compares bytes.
 writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: TEXT_MAX_BYTES,
-    screenshots: SCREENSHOT_CAPS,
+  join(outDir, 'dossier.json'),
+  buildDossier(outDir, {
+    text_max_bytes: MAX_TEXT_BYTES,
+    screenshots: SHOT_CAPS,
     dashboard: { max_files: 400, max_bytes: 4_194_304 },
   }),
 );
 
 process.stdout.write(
-  `token radar: ${snapshot.protocols.length} protocols in the snapshot, ${snapshot.watchlist.length} on the watchlist\n` +
+  `token radar: ${snap.protocols.length} protocols in the snapshot, ${snap.watchlist.length} on the watchlist\n` +
     `token radar: ${board.length} rows scored (${radar.early_size} early beyond the watchlist, ` +
     `${radar.early_below_floor} of them below the floor), ` +
-    `top-10 implied value ${radar.total_implied_top10_usd.toLocaleString('en-US')} USD\n` +
-    `token radar: wrote ${join(out, 'board.json')}, ${join(out, 'data.js')}, ` +
-    `${join(out, 'dashboard')} (${dashboardFiles.length} files), ` +
-    `${join(out, 'screenshots')} (${shots.length} images) and ${join(out, 'dossier.json')}\n`,
+    `top-10 implied value ${radar.total_implied_top10_usd.toLocaleString('en-US')} USD, ` +
+    `all rows ${radar.total_implied_all_usd.toLocaleString('en-US')} USD\n` +
+    `token radar: rank 1 ${board[0]!.name} at ${board[0]!.implied_value_usd.toLocaleString('en-US')} USD, ` +
+    `median rankable age ${radar.median_age_days} days, live set ${radar.live_size}\n` +
+    `token radar: wrote ${join(outDir, 'board.json')}, ${join(outDir, 'data.js')}, ` +
+    `${join(outDir, 'dashboard')} (${dashFiles.length} files), ` +
+    `${join(outDir, 'screenshots')} (${shotFiles.length} images) and ${join(outDir, 'dossier.json')}\n`,
 );
