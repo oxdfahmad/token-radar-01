@@ -130,6 +130,12 @@ export interface RadarRow {
   category_multiple: number; growth_multiplier: number;
   maturity_multiplier: number; breadth_multiplier: number;
   on_watchlist: boolean;
+  /** How much the snapshot's own record backs this row's implied value, 0..100. */
+  confidence_score: number;
+  /** High at 85+, Medium at 65..84, Low below 65. */
+  confidence_band: 'High' | 'Medium' | 'Low';
+  /** The gaps behind the score, in short phrases the detail view shows. */
+  confidence_reasons: string[];
 }
 
 /** A live-token protocol: already trading, so the board shows the market's own value. */
@@ -313,6 +319,50 @@ export function impliedValue(
     Math.round(protocol.tvl_usd * catMultiple * growthMul * maturityMul * breadthMul),
   );
   return { implied: value, categoryMultiple: catMultiple, growthPct: growthClamped, growthMult: growthMul, maturityMult: maturityMul, breadthMult: breadthMul, age: listedAge, ageUsed: ageApplied };
+}
+
+/** How much the snapshot's own record backs a row's implied value.
+ *
+ * The score starts at 100 and loses points only for gaps in the snapshot's own
+ * record — never for the value itself, so a high-implied protocol can still
+ * score low when its record is thin, and a small one can score high. The
+ * deductions: growth unreported −20, listed date unknown −20, a thin category
+ * calibration −15, a single chain −10. The band is High at 85+, Medium at
+ * 65..84, Low below 65. The page recomputes this from the same inputs, so the
+ * two must agree exactly. */
+export interface RowConfidence {
+  score: number;
+  band: 'High' | 'Medium' | 'Low';
+  reasons: string[];
+}
+
+export function confidenceOf(
+  protocol: SnapshotProtocol,
+  calibration: Calibration,
+): RowConfidence {
+  let score = 100;
+  const reasons: string[] = [];
+  if (protocol.change_7d === null || protocol.change_7d === undefined) {
+    score -= 20;
+    reasons.push('Seven-day growth is unreported, so momentum is scored as flat.');
+  }
+  if (protocol.listed_at === null || protocol.listed_at === undefined) {
+    score -= 20;
+    reasons.push('Listed date unknown — the age factor uses the snapshot median instead of its own age.');
+  }
+  const calRow = calibration.by_category.find(
+    (c) => c.category === (protocol.category ?? 'Other'),
+  );
+  if (calRow !== undefined && calRow.thin) {
+    score -= 15;
+    reasons.push('Category multiple falls back to the global median — too few live protocols to calibrate on.');
+  }
+  if (protocol.chains.length <= 1) {
+    score -= 10;
+    reasons.push('Live on one chain only, so a chain outage strands the whole position.');
+  }
+  const band: 'High' | 'Medium' | 'Low' = score >= 85 ? 'High' : score >= 65 ? 'Medium' : 'Low';
+  return { score, band, reasons };
 }
 
 /** The snapshot's protocol by slug. */
@@ -575,7 +625,16 @@ export function liveRows(snapshot: Snapshot): LiveRow[] {
 }
 
 /** A board row's compact form for data.js, with the farm plan regenerated in the page. */
-export function radarRow(boardRow: BoardRow, watched: boolean): RadarRow {
+export function radarRow(boardRow: BoardRow, watched: boolean, cal: Calibration): RadarRow {
+  const conf = confidenceOf(
+    {
+      slug: boardRow.slug, name: boardRow.name, category: boardRow.category,
+      chains: boardRow.chains, tvl_usd: boardRow.tvl_usd, change_7d: boardRow.change_7d,
+      mcap_usd: boardRow.mcap_usd, listed_at: boardRow.listed_at,
+      gecko_id: boardRow.gecko_id, symbol: boardRow.symbol,
+    },
+    cal,
+  );
   return {
     rank: boardRow.rank,
     slug: boardRow.slug,
@@ -593,6 +652,9 @@ export function radarRow(boardRow: BoardRow, watched: boolean): RadarRow {
     maturity_multiplier: boardRow.model.maturity_multiplier,
     breadth_multiplier: boardRow.model.breadth_multiplier,
     on_watchlist: watched,
+    confidence_score: conf.score,
+    confidence_band: conf.band,
+    confidence_reasons: conf.reasons,
   };
 }
 
@@ -645,7 +707,7 @@ export function buildRadar(
     median_age_days: medAge,
     calibration: cal,
     worked_example: worked,
-    rows: rows.map((row) => radarRow(row, watchSet.has(row.slug))),
+    rows: rows.map((row) => radarRow(row, watchSet.has(row.slug), cal)),
     live: liveSet,
   };
   return { board: rows, radar: data };
