@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Radar — pre-token protocols ranked by implied value</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip" href="#board">Skip to the board</a>
+<header class="top">
+  <div class="brand">
+    <span class="radar-dot" aria-hidden="true"></span>
+    <span class="brand-name">Token Radar</span>
+    <span class="brand-tag">pre-token protocols, ranked by what a launch would be worth</span>
+  </div>
+  <div class="top-meta" id="top-meta"></div>
+</header>
+<main id="board" tabindex="-1" aria-busy="true">
+  <section class="lede">
+    <div>
+      <h1>Which protocol should you farm next?</h1>
+      <p class="lede-text" id="lede-text"></p>
+      <p class="lede-note">Implied value is this radar's own estimate, not a price and not a promise. A protocol
+      <em>records no token</em> in the snapshot — that is DefiLlama's record, not proof it has none.</p>
+    </div>
+    <div class="facts" id="facts"></div>
+  </section>
+  <section class="controls" id="controls" aria-label="Filter the board"></section>
+  <section id="table-slot" aria-label="Ranked board"></section>
+  <section class="panel model" id="model-slot" aria-label="How implied value is computed"></section>
+  <section class="panel method">
+    <h2>How to read this radar</h2>
+    <ul>
+      <li><b>Watchlist is the floor, never the ceiling.</b> The 40 watchlist protocols are the big pre-token
+      names at $50M+ TVL. The early radar adds every other pre-token protocol the same rule keeps, so a
+      fast-growing small protocol can outrank a large flat one.</li>
+      <li><b>Live-token protocols are set aside.</b> They already trade, so their market cap is a fact, not a
+      model. They appear on the Live token tab, and their market-cap / TVL ratios calibrate the multiples.</li>
+      <li><b>Wrapped, staked and bridged products are out.</b> A wrapped or staked product of a token that
+      already trades is not a token still to come, so the board leaves those categories and names out entirely.</li>
+      <li><b>Farm plans cost real money.</b> Every step states its capital, its gas and its time. Never pay to
+      claim an airdrop, never approve an unlimited spend, and never farm with money you cannot lose.</li>
+    </ul>
+  </section>
+</main>
+<footer class="foot">
+  <span id="foot-source"></span>
+  <span>Model <b id="foot-model"></b> · built for make.fun token-radar-01</span>
+</footer>
+<dialog class="detail" id="detail" aria-labelledby="detail-title"></dialog>
+<script src="../data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
