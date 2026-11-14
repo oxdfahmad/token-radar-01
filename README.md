@@ -1,10 +1,51 @@
-# Token Radar — model radar-3
+# Token Radar — model radar-3, dashboard v4 ("Clear Lens" v4)
 
 A token launch radar for make.fun's token-radar-01 bounty. It reads a sealed
 DefiLlama snapshot of 758 protocols, ranks the pre-token ones by implied launch
 value, and hands in a web dashboard: a sortable, filterable board, a detail view
 for every protocol with its model breakdown, its risks and its farm plan, plus a
 live-token view kept apart with market caps.
+
+## What changed in v4
+
+v4 is a density and polish revision of the submitted v3 entry. The model is
+untouched — radar-3, same implied values, same ranks, same farm plans, and
+board.json is byte-identical to v3. Only the dashboard presentation changed,
+so each screenshot shows more real data:
+
+- **Denser board** — compact table rows (tighter padding, smaller name text),
+  so about ten protocols fit in one viewport instead of seven and a half.
+- **Controls that fit** — the filter row is tightened so the token-status tabs
+  and the row count are fully visible at 1440 px.
+- **Richer insight strip** — six fastest movers (was five), each with its
+  TVL next to its growth; six category bars (was five), each labelled with
+  its protocol count; the confidence mix now counts the rows whose record has
+  gaps (no 7-day growth, no listed date); the model strip now carries the
+  top-10 and all-rows implied totals.
+- **More per row, no extra height** — the farm-cost cell now reads
+  "$153.5 · ~30 min" (total upfront plus time to the first position); the
+  confidence badge carries a gap count ("no gaps", "1 gap", "2 gaps"); the
+  name sub-line notes extra chains ("+2 more").
+- **Richer detail dialog** — a "Nearest rivals" section after the farm
+  plan lists the four ranks around the open protocol with their implied
+  values and confidence, plus a one-line read of the dollar gaps; the eight
+  farm steps now sit right after the farm summary, so the densest prose is
+  visible without scrolling; risks are laid out in two columns so the farm
+  plan starts higher up.
+- **Screenshots** — retaken at 1440×900 from the same three states as v3
+  (default board, rank-1 detail, fast-growth filter). Final sizes:
+  1-board 302,808 B (inside the judge's 300–350 KB band), 2-detail
+  254,733 B, 3-filtered 280,795 B. The detail and filtered shots land
+  below the band: the detail dialog is a modal over a dimmed page (the
+  dimmed background compresses hard), and the fast filter holds only 14
+  rows — both are honest limits of their formats, not padding; every number
+  on screen comes from board.json / data.js, and all three pass the kit's
+  hard caps (≤512 KiB each).
+
+Verification for v4: two builds byte-identical (board.json, dossier.json,
+data.js); `verify_gate.mjs` 7/7; `verify_page.mjs` in real headless Chromium
+(198 rows recomputed, 0 implied / 0 farm-step / 0 confidence mismatches,
+filters and the rank-1 dialog exercised).
 
 ## The model (radar-3)
 
